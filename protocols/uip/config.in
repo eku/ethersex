@@ -2,4 +2,4 @@
 	dep_bool 'UDP support' UDP_SUPPORT $UIP_SUPPORT
 	dep_bool 'UDP broadcast support' BROADCAST_SUPPORT $UDP_SUPPORT
 	dep_bool 'ICMP support' ICMP_SUPPORT $UIP_SUPPORT
-
+	dep_bool 'IPv4/IPv6 Dual Stack support' DUAL_STACK_SUPPORT $UIP_SUPPORT $IPV4_SUPPORT $IPV6_SUPPORT

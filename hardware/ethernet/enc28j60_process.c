@@ -235,22 +235,39 @@ void process_packet(void)
             break;
 #       endif /* !UIP_CONF_IPV6 */
 
-#       if UIP_CONF_IPV6
-        /* process ip packet */
+#       if defined(DUAL_STACK_SUPPORT)
+        /* Dual-stack: process both IPv4 and IPv6 */
+        case UIP_ETHTYPE_IP:
+#           ifdef DEBUG_NET
+            debug_printf ("net: ip packet received\n");
+#           endif
+            uip_arp_ipin();
+            router_input(STACK_ENC);
+            break;
         case UIP_ETHTYPE_IP6:
 #           ifdef DEBUG_NET
             debug_printf ("net: ip6 packet received\n");
 #           endif
-#       else /* !UIP_CONF_IPV6 */
+            router_input(STACK_ENC);
+            break;
+#       elif UIP_CONF_IPV6
+        /* IPv6 only */
+        case UIP_ETHTYPE_IP6:
+#           ifdef DEBUG_NET
+            debug_printf ("net: ip6 packet received\n");
+#           endif
+            router_input(STACK_ENC);
+            break;
+#       else /* IPv4 only */
         /* process ip packet */
         case UIP_ETHTYPE_IP:
 #           ifdef DEBUG_NET
             debug_printf ("net: ip packet received\n");
 #           endif
             uip_arp_ipin();
-#       endif /* !UIP_CONF_IPV6 */
-
             router_input(STACK_ENC);
+            break;
+#       endif
 
 	    /* if there is a packet to send, send it now */
 	    if (uip_len > 0)

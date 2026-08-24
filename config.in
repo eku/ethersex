@@ -223,12 +223,8 @@ mainmenu_option next_comment
 	source scripts/ip-router-conf.sh
 
 	comment "IP configuration"
+	dep_bool 'IPv4 support' IPV4_SUPPORT $UIP_SUPPORT
 	dep_bool 'IPv6 support'		IPV6_SUPPORT $UIP_SUPPORT
-	if [ "$IPV6_SUPPORT" = "y" ]; then
-		define_bool IPV4_SUPPORT n
-	else
-		define_bool IPV4_SUPPORT $UIP_SUPPORT
-	fi
 
 	dep_bool 'Enable IP forwarding' IP_FORWARDING_SUPPORT $ROUTER_SUPPORT
 

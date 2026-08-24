@@ -153,6 +153,12 @@ typedef unsigned short uip_stats_t;
 #  define UIP_CONF_IPV6          0
 #endif
 
+#ifdef DUAL_STACK_SUPPORT
+#  define UIP_CONF_DUAL_STACK     1
+#else
+#  define UIP_CONF_DUAL_STACK     0
+#endif
+
 #ifdef BROADCAST_SUPPORT
 #  define UIP_CONF_BROADCAST     1
 #else
