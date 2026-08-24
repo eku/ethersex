@@ -71,11 +71,10 @@ parse_cmd_ir_receive(char *cmd, char *output, uint16_t len)
                  rc5_global.queue[l].address, rc5_global.queue[l].code);
 #endif
 
-    sprintf_P(s, PSTR("%02u%02u\n"),
-              rc5_global.queue[l].address, rc5_global.queue[l].code);
-
-    s += 5;
-    outlen += 5;
+    int written = snprintf_P(s, len - outlen, PSTR("%02u%02u\n"),
+                           rc5_global.queue[l].address, rc5_global.queue[l].code);
+    s += written;
+    outlen += written;
     l++;
 
 #ifdef DEBUG_ECMD_RC5

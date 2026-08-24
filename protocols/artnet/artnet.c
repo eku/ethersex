@@ -103,8 +103,8 @@ artnet_init(void)
 #else
   artnet_sendPollReplyOnChange = 0;
 #endif
-  strcpy_P(artnet_shortName, PSTR("e6ArtNode"));
-  strcpy_P(artnet_longName, PSTR("e6ArtNode hostname: " CONF_HOSTNAME));
+  strncpy_P(artnet_shortName, PSTR("e6ArtNode"), sizeof(artnet_shortName));
+  strncpy_P(artnet_longName, PSTR("e6ArtNode hostname: " CONF_HOSTNAME), sizeof(artnet_longName));
 
   set_CONF_ARTNET_OUTPUT_IP(&artnet_outputTarget);
 
@@ -180,9 +180,9 @@ artnet_sendPollReply(const uip_ipaddr_t *dest)
   msg->status = 0;
   /* Report as Manufacturer "ESTA" http://tsp.plasa.org/tsp/working_groups/CP/mfctrIDs.php */
   msg->estaMan = 0xFFFF;
-  strcpy(msg->shortName, artnet_shortName);
-  strcpy(msg->longName, artnet_longName);
-  sprintf(msg->nodeReport, "#%04X [%04u] e6ArtNode is ready", artnet_status,
+  strncpy(msg->shortName, artnet_shortName, sizeof(msg->shortName));
+  strncpy(msg->longName, artnet_longName, sizeof(msg->longName));
+  snprintf(msg->nodeReport, sizeof(msg->nodeReport), "#%04X [%04u] e6ArtNode is ready", artnet_status,
           (unsigned int) artnet_pollReplyCounter);
 
   msg->numPortsH = 0;

@@ -81,25 +81,32 @@ static void fs20_net_main(void)  // Network-routine called by networkstack
         // (re-)transmit packet
         FS20S_DEBUG ("new connection or rexmit, sending message\n");
         char *p = uip_appdata;  // pointer set to uip_appdata, used to store string
+        int remaining = UIP_APPDATA_SIZE;
 
-        p += sprintf_P(p, PSTR("fs20 "));
+        int written = snprintf_P(p, remaining, PSTR("fs20 "));
+        p += written;
+        remaining -= written;
 
 		if (fs20_global.fs20.queue[fs20_qpos].ext)
 		{
-			p += sprintf_P(p, PSTR("%02x%02x%02x%02x%02x"), fs20_global.fs20.queue[fs20_qpos].data.edg.hc1,
+			written = snprintf_P(p, remaining, PSTR("%02x%02x%02x%02x%02x"), fs20_global.fs20.queue[fs20_qpos].data.edg.hc1,
 					fs20_global.fs20.queue[fs20_qpos].data.edg.hc2, fs20_global.fs20.queue[fs20_qpos].data.edg.addr,
 					fs20_global.fs20.queue[fs20_qpos].data.edg.cmd, fs20_global.fs20.queue[fs20_qpos].data.edg.cmd2);
+			p += written;
+			remaining -= written;
 		}
 		else
 		{
-			p += sprintf_P(p, PSTR("%02x%02x%02x%02x"), fs20_global.fs20.queue[fs20_qpos].data.dg.hc1,
+			written = snprintf_P(p, remaining, PSTR("%02x%02x%02x%02x"), fs20_global.fs20.queue[fs20_qpos].data.dg.hc1,
 					fs20_global.fs20.queue[fs20_qpos].data.dg.hc2, fs20_global.fs20.queue[fs20_qpos].data.dg.addr,
 					fs20_global.fs20.queue[fs20_qpos].data.dg.cmd);
+			p += written;
+			remaining -= written;
 		}
 
 		fs20_global.fs20.queue[fs20_qpos].send = 0;
 
-        uip_udp_send(p - (char *)uip_appdata);
+        uip_udp_send(p - uip_appdata);
         FS20S_DEBUG ("send %d bytes\n", p - (char *)uip_appdata);
         FS20S_DEBUG ("send %s\n", uip_appdata);
     }

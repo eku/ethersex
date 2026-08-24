@@ -102,8 +102,9 @@ main(int argc, char **argv)
   image_len = fread(buf_image, 1, MAX_IMAGE_SIZE, f);
   fclose(f);
 
-  strcpy(filename_gz, argv[3]);
-  strcat(filename_gz, ".gz");
+  strncpy(filename_gz, argv[3], sizeof(filename_gz) - 1);
+  filename_gz[sizeof(filename_gz) - 1] = '\0';
+  strncat(filename_gz, ".gz", sizeof(filename_gz) - strlen(filename_gz) - 1);
 
   fprintf(stderr, "%s\n", filename_gz);
 

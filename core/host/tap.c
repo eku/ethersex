@@ -63,7 +63,8 @@ tap_alloc(char *dev)
     close(fd);
     return err;
   }
-  strcpy(dev, ifr.ifr_name);
+  strncpy(dev, ifr.ifr_name, IFNAMSIZ);
+  dev[IFNAMSIZ - 1] = '\0';
   return fd;
 }              
 

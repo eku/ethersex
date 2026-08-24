@@ -42,16 +42,16 @@ output_sht_error(int8_t returncode, char *output)
   {
     case SHT_ERR_CRC:
 #define SHT_ERR_CRC_MSG "crc error"
-      strcpy_P(output, PSTR(SHT_ERR_CRC_MSG));
+      strncpy_P(output, PSTR(SHT_ERR_CRC_MSG), len);
       return ECMD_FINAL(sizeof(SHT_ERR_CRC_MSG));
     case SHT_ERR_TIMEOUT:
 #define SHT_ERR_TIMEOUT_MSG "timeout"
-      strcpy_P(output, PSTR(SHT_ERR_TIMEOUT_MSG));
+      strncpy_P(output, PSTR(SHT_ERR_TIMEOUT_MSG), len);
       return ECMD_FINAL(sizeof(SHT_ERR_TIMEOUT_MSG));
     case SHT_ERR_PROTOCOL:
     default:
 #define SHT_ERR_PROTOCOL_MSG "no sht"
-      strcpy_P(output, PSTR(SHT_ERR_PROTOCOL_MSG));
+      strncpy_P(output, PSTR(SHT_ERR_PROTOCOL_MSG), len);
       return ECMD_FINAL(sizeof(SHT_ERR_PROTOCOL_MSG));
   }
 }

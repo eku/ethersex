@@ -79,12 +79,12 @@ static int16_t output_zac_error(int8_t returncode, char *output)
     switch(returncode)
     {
         case ZACWIRE_ERR_PARITY:
-            strcpy_P(output, PSTR("parity error"));
+            strncpy_P(output, PSTR("parity error"), len);
             return ECMD_FINAL(12);  // length of "parity error"
         case ZACWIRE_ERR_TIMEOUT:
         case ZACWIRE_ERR_PROTOCOL:
         default:
-            strcpy_P(output, PSTR("no zacwire"));
+            strncpy_P(output, PSTR("no zacwire"), len);
             return ECMD_FINAL(10);  // lenght of "no zacwire"
     }
 }

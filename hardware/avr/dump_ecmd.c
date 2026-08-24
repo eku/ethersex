@@ -38,10 +38,15 @@ parse_cmd_d(char *cmd, char *output, uint16_t len)
     return ECMD_ERR_PARSE_ERROR;
 
   unsigned char *ptr = (void *) temp;
-  for (int i = 0; i < 16; i++)
-    sprintf_P(output + (i << 1), PSTR("%02x"), *(ptr++));
+  char *p = output;
+  int remaining = len;
+  for (int i = 0; i < 16; i++) {
+    int written = snprintf_P(p, remaining, PSTR("%02x"), *(ptr++));
+    p += written;
+    remaining -= written;
+  }
 
-  return ECMD_FINAL(32);
+  return ECMD_FINAL(p - output);
 }
 
 /*

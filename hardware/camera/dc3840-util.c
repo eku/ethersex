@@ -41,7 +41,7 @@ dc3840_save_snapshot (void)
   clock_localtime(&datetime, clock_get_time());
 
   char filename[24];
-  sprintf_P (filename, PSTR ("%04d/%02d/%02d/%02d"), datetime.year,
+  snprintf_P (filename, sizeof(filename), PSTR ("%04d/%02d/%02d/%02d"), datetime.year,
 	     datetime.month, datetime.day, datetime.hour);
 
   if (vfs_sd_mkdir_recursive (filename))
@@ -51,7 +51,7 @@ dc3840_save_snapshot (void)
     }
 
   /* Now append the filename (minute and seconds) */
-  sprintf_P (filename + 13, PSTR ("/%02d%02d.jpg"), datetime.min,
+  snprintf_P (filename + 13, sizeof(filename) - 13, PSTR ("/%02d%02d.jpg"), datetime.min,
 	     datetime.sec);
 
   /* Get source-filename.  Some hackery to have it in .text section :) */

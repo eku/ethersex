@@ -112,15 +112,15 @@ int16_t parse_cmd_fs20_receive(char *cmd, char *output, uint16_t len)
     {
         if ( fs20_global.fs20.queue[l].ext )
         {
-            sprintf_P(s, PSTR("%02x%02x%02x%02x%02x\n"),
+            int written = snprintf_P(s, len - outlen, PSTR("%02x%02x%02x%02x%02x\n"),
                       fs20_global.fs20.queue[l].data.edg.hc1,
                       fs20_global.fs20.queue[l].data.edg.hc2,
                       fs20_global.fs20.queue[l].data.edg.addr,
                       fs20_global.fs20.queue[l].data.edg.cmd,
                       fs20_global.fs20.queue[l].data.edg.cmd2);
 
-            s += 11;
-            outlen += 11;
+            s += written;
+            outlen += written;
 
 #ifdef DEBUG_ECMD_FS20
             debug_printf("outlen: %d, pos %u: %02x%02x%02x%02x%02x\n", outlen, l,

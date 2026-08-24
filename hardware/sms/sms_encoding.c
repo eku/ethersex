@@ -28,7 +28,7 @@
 void sms_get_number(uint8_t *rufnummer, uint8_t *encoded_num) 
 {
     uint8_t i = 0, j = 4;
-    sprintf((char *) encoded_num, "%02X91", strlen((char *) rufnummer)); 
+    snprintf((char *) encoded_num, 20, "%02X91", strlen((char *) rufnummer)); 
     
     while (rufnummer[i] != '\0') {
         encoded_num[j+1] = rufnummer[i];

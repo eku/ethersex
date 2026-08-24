@@ -49,7 +49,7 @@ temp2text(char *textbuf, int16_t temperatur)
   }
   else{
     /* "Out of range" Indikator */
-    strcpy_P(textbuf, PSTR("!NaN!"));
+    strncpy_P(textbuf, PSTR("!NaN!"), sizeof(textbuf));
   }
   // return 5; <-- maybe better make it explicit
 }

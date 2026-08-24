@@ -50,11 +50,16 @@ parse_cmd_eer(char *cmd, char *output, uint16_t len)
     return ECMD_ERR_PARSE_ERROR;
 
   uint16_t ptr = eeprom_start + addr_offset;
-  for (uint16_t i = 0; i < length; i++)
-    sprintf_P(output + (i << 1), PSTR("%02x"),
-              eeprom_read_byte((uint8_t *) (ptr++)));
+  char *p = output;
+  int remaining = len;
+  for (uint16_t i = 0; i < length; i++) {
+    int written = snprintf_P(p, remaining, PSTR("%02x"),
+                           eeprom_read_byte((uint8_t *) (ptr++)));
+    p += written;
+    remaining -= written;
+  }
 
-  return ECMD_FINAL(length * 2);
+  return ECMD_FINAL(p - output);
 }
 
 
@@ -82,7 +87,7 @@ parse_cmd_eew(char *cmd, char *output, uint16_t len)
     /* Read the next hex byte */
     uint8_t value;
     if (!(p = next_hexbyte(cmd, &value)))
-      return sprintf(output, "%d hexbyte '%x'", i, value);
+      return snprintf(output, len, "%d hexbyte '%x'", i, value);
     cmd += p;
 
     eeprom_write_byte((uint8_t *) (ptr++), value);

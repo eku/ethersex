@@ -45,7 +45,7 @@ parse_cmd_irmp_receive(char *cmd, char *output, uint16_t len)
 
   irmp_data_t *irmp_data_p = irmp_read();
   return (irmp_data_p != 0
-          ? ECMD_FINAL(sprintf_P(output,
+          ? ECMD_FINAL(snprintf_P(output, len,
                                  PSTR("%02" PRIu8 ":"
                                       "0x%04" PRIX16 ":"
                                       "0x%04" PRIX16 ":"

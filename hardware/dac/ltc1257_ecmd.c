@@ -63,7 +63,7 @@ int16_t parse_cmd_ltc1257_delay(char *cmd, char *output, uint16_t len)
 		/* re-enable interrupts */
 		SREG = sreg;
 
-		slen = sprintf_P(output, PSTR("%u"), delay);
+		slen = snprintf_P(output, len, PSTR("%u"), delay);
 	}
 	
 	LTC1257_ECMD_DEBUG("parse_cmd_ltc1257_delay end.\n");

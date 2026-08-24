@@ -51,7 +51,7 @@ parse_cmd_crc_calc(char *cmd, char *output, uint16_t len)
     crc = _crc16_update(crc, pgm_read_byte(p));
 #endif
 
-  return ECMD_FINAL(sprintf_P(output, PSTR("%.4X"), crc));
+  return ECMD_FINAL(snprintf_P(output, len, PSTR("%.4X"), crc));
 }
 
 
@@ -62,7 +62,7 @@ parse_cmd_crc_read(char *cmd, char *output, uint16_t len)
 
   crc = pgm_read_word_far(CRC_BYTE_POS);
 
-  return ECMD_FINAL(sprintf_P(output, PSTR("%.4X"), crc));
+  return ECMD_FINAL(snprintf_P(output, len, PSTR("%.4X"), crc));
 }
 
 
