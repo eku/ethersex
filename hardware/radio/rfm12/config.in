@@ -44,6 +44,7 @@ if [ "$RFM12_IP_SUPPORT" = "y" -o $RFM12S -gt $RFM12S_USED ]; then
     fi
 
     dep_bool "RFM12 ARP-Proxy" RFM12_ARP_PROXY $ENC28J60_SUPPORT $RFM12_IP_SUPPORT
+    dep_bool "RFM12 NDP-Proxy" RFM12_NDP_PROXY $NDP_PROXY_SUPPORT $IPV6_SUPPORT $RFM12_IP_SUPPORT
 
     if [ "$RFM12_IP_SUPPORT" != "y" ]; then
       bool "Disable RFM12 module" RFM12_DISABLE

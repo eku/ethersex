@@ -10,6 +10,7 @@ else
 fi
 
 dep_bool "USBnet ARP-Proxy" USB_ARP_PROXY $ENC28J60_SUPPORT
+	dep_bool "USBnet NDP-Proxy" USB_NDP_PROXY $NDP_PROXY_SUPPORT $IPV6_SUPPORT
 
 fi
 endmenu

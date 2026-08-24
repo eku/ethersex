@@ -86,6 +86,9 @@
 #include "protocols/zbus/zbus.h"
 #include "core/debug.h"
 #include "hardware/radio/rfm12/rfm12.h"
+#ifdef NDP_PROXY_SUPPORT
+#include "uip_ndp_proxy.h"
+#endif
 
 #if UIP_CONF_IPV6
 #include "uip_neighbor.h"
@@ -1025,10 +1028,14 @@ ip_check_end:
   UIP_STAT(++uip_stat.icmp.recv);
 
 #ifdef ETHERNET_SUPPORT
-  /* If we get a neighbor solicitation for our address we should send
-     a neighbor advertisement message back. */
+  /* If we get a neighbor solicitation for our address or a proxied address
+     we should send a neighbor advertisement message back. */
   if(ICMPBUF->type == ICMP6_NEIGHBOR_SOLICITATION) {
-    if(uip_ipaddr_cmp(ICMPBUF->icmp6data, uip_hostaddr)) {
+    if(uip_ipaddr_cmp(ICMPBUF->icmp6data, uip_hostaddr)
+#ifdef NDP_PROXY_SUPPORT
+       || ndp_proxy_check(ICMPBUF->icmp6data)
+#endif
+       ) {
 
       if(ICMPBUF->options[0] == ICMP6_OPTION_SOURCE_LINK_ADDRESS) {
 	/* Save the sender's address in our neighbor list. */
