@@ -52,13 +52,12 @@ void network_process(void)
     if ( !interrupt_occured() )
         return;
 
-    /* also check packet counter, see errata #6 */
-#ifdef ENC28J60_REV4_WORKAROUND
+    /* read packet counter: EPKTCNT is authoritative, EIR.PKTIF is
+     * unreliable on all silicon revisions, see errata #6 and #318 */
     uint8_t pktcnt = read_control_register(REG_EPKTCNT);
 #ifdef DEBUG_REV4_WORKAROUND
     if (pktcnt > 5)
         debug_printf("net: BUG: pktcnt > 5\n");
-#endif
 #endif
 
     /* read interrupt register */
@@ -91,7 +90,7 @@ void network_process(void)
     /* link change flag */
     if (EIR & _BV(LINKIF)) {
 
-        /* clear interrupt flag */
+        /* clear interrupt flag (reading PHIR clears LINKIF) */
         read_phy(PHY_PHIR);
 
         /* read new link state */
@@ -124,12 +123,9 @@ void network_process(void)
         bit_field_clear(REG_ESTAT, _BV(TXABRT) | _BV(LATECOL) );
     }
 
-    /* packet receive flag */
-    if ( (EIR & _BV(PKTIF)) 
-#ifdef ENC28J60_REV4_WORKAROUND
-           || pktcnt 
-#endif
-           ) {
+    /* packet receive flag: gate on EPKTCNT only, a stale EIR.PKTIF
+     * would spin this loop forever, see errata #6 and issue #318 */
+    if (pktcnt) {
       if (uip_buf_lock ())
         return;			/* already locked */
 
