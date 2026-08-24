@@ -1465,7 +1465,46 @@ void uip_process(u8_t flag);
 
 /* The TCP and IP headers. */
 struct uip_tcpip_hdr {
-#if UIP_CONF_IPV6
+#if UIP_CONF_DUAL_STACK
+  /* Dual-stack: support both IPv4 and IPv6 simultaneously */
+  union {
+    struct {
+      /* IPv4 header */
+      u8_t vhl;
+      u8_t tos;
+      u8_t len[2];
+      u8_t ipid[2];
+      u8_t ipoffset[2];
+      u8_t ttl;
+      u8_t proto;
+      u16_t ipchksum;
+      u16_t srcipaddr[2];
+      u16_t destipaddr[2];
+    } v4;
+    struct {
+      /* IPv6 header */
+      u8_t vtc;
+      u8_t tcflow;
+      u16_t flow;
+      u8_t len[2];
+      u8_t proto;
+      u8_t ttl;
+      uip_ip6addr_t srcipaddr;
+      uip_ip6addr_t destipaddr;
+    } v6;
+  } ip;
+#endif /* UIP_CONF_DUAL_STACK */
+
+/* For dual-stack mode, provide accessor macros */
+#if UIP_CONF_DUAL_STACK
+  #define BUF_VHL      (BUF->ip.v4.vhl)
+  #define BUF_TOS      (BUF->ip.v4.tos)
+  #define BUF_PROTO    ((BUF_VHL >> 4) == 4 ? BUF->ip.v4.proto : BUF->ip.v6.proto)
+  #define BUF_TTL      ((BUF_VHL >> 4) == 4 ? BUF->ip.v4.ttl : BUF->ip.v6.ttl)
+  #define BUF_DESTIPADDR ((BUF_VHL >> 4) == 4 ? (uip_ipaddr_t *)BUF->ip.v4.destipaddr : (uip_ipaddr_t *)BUF->ip.v6.destipaddr)
+  #define BUF_SRCIPADDR ((BUF_VHL >> 4) == 4 ? (uip_ipaddr_t *)BUF->ip.v4.srcipaddr : (uip_ipaddr_t *)BUF->ip.v6.srcipaddr)
+  #define BUF_LEN      ((BUF_VHL >> 4) == 4 ? BUF->ip.v4.len : BUF->ip.v6.len)
+#elif UIP_CONF_IPV6
   /* IPv6 header. */
   u8_t vtc,
     tcflow;
@@ -1502,7 +1541,32 @@ struct uip_tcpip_hdr {
 
 /* The ICMP and IP headers. */
 struct uip_icmpip_hdr {
-#if UIP_CONF_IPV6
+#if UIP_CONF_DUAL_STACK
+  union {
+    struct {
+      u8_t vhl;
+      u8_t tos;
+      u8_t len[2];
+      u8_t ipid[2];
+      u8_t ipoffset[2];
+      u8_t ttl;
+      u8_t proto;
+      u16_t ipchksum;
+      u16_t srcipaddr[2];
+      u16_t destipaddr[2];
+    } v4;
+    struct {
+      u8_t vtc;
+      u8_t tcf;
+      u16_t flow;
+      u8_t len[2];
+      u8_t proto;
+      u8_t ttl;
+      uip_ip6addr_t srcipaddr;
+      uip_ip6addr_t destipaddr;
+    } v6;
+  } ip;
+#elif UIP_CONF_IPV6
   /* IPv6 header. */
   u8_t vtc,
     tcf;

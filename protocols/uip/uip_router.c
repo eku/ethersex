@@ -25,6 +25,9 @@
 
 #include "protocols/uip/uip.h"
 #include "protocols/uip/uip_neighbor.h"
+#ifdef UIP_CONF_DUAL_STACK
+#include "protocols/uip/uip_dualstack.h"
+#endif
 
 #include "protocols/uip/ipv6.h"
 #include "network.h"
@@ -56,7 +59,11 @@ router_find_stack(uip_ipaddr_t *forwardip)
 routing_input:
   for (i = 0; i < STACK_LEN; i++) {
     uip_stack_set_active(i);
+    #if UIP_CONF_DUAL_STACK
+    if((! forwardip) && uip_ipaddr_cmp(uip_get_destipaddr(BUF), uip_hostaddr))
+    #else
     if((! forwardip) && uip_ipaddr_cmp(BUF->destipaddr, uip_hostaddr))
+    #endif
       return i;
 #ifdef IPV6_SUPPORT
     if(forwardip && uip_ipaddr_prefixlencmp(*forwardip, uip_hostaddr,
@@ -115,7 +122,11 @@ router_input(uint8_t origin)
 #ifdef IP_FORWARDING_SUPPORT
       /* Packet not addressed to us, check destination address to where
 	 the packet has to be routed. */
+      #if UIP_CONF_DUAL_STACK
+      uint8_t dest = router_find_stack(uip_get_destipaddr(BUF));
+      #else
       uint8_t dest = router_find_stack(&BUF->destipaddr);
+      #endif
       if (dest == 255)
         {
 	  uip_len = 0;
@@ -125,7 +136,12 @@ router_input(uint8_t origin)
       if (origin == dest)
 	goto drop;
 
+      #if UIP_CONF_DUAL_STACK
+      uip_decr_ttl(BUF);
+      if (uip_get_ttl(BUF) == 0)
+      #else
       if (-- BUF->ttl == 0)
+      #endif
 	{
 	  /* TODO send ICMP message */
 	  printf ("ttl exceeded, should send ICMP message.\n");
@@ -137,7 +153,13 @@ router_input(uint8_t origin)
       if(!uip_len) return;
 #endif
 
-#if !UIP_CONF_IPV6
+#if UIP_CONF_DUAL_STACK
+      /* For dual-stack, adjust checksum only for IPv4 */
+      if (uip_is_ipv4(BUF) && BUF->ip.v4.ipchksum >= HTONS(0xffff - (1 << 8)))
+	BUF->ip.v4.ipchksum += HTONS(1 << 8) + 1;
+      else if (uip_is_ipv4(BUF))
+	BUF->ip.v4.ipchksum += HTONS(1 << 8);
+#elif !UIP_CONF_IPV6
       /* For IPv4 we must adjust the chksum */
       if(BUF->ipchksum >= HTONS(0xffff - (1 << 8)))
 	BUF->ipchksum += HTONS(1 << 8) + 1;
