@@ -568,6 +568,28 @@ uip_conn_t *uip_connect(const uip_ipaddr_t *ripaddr, u16_t port, uip_conn_callba
 void uip_send(const void *data, int len);
 
 /**
+ * Calculate the internet checksum over a buffer (RFC 1071).
+ *
+ * The 'sum' parameter is prepended to the calculation, pass 0 to
+ * checksum a plain buffer.  The result is returned in network byte
+ * order and may be stored into a checksum header field after one's
+ * complementing it.
+ *
+ * \param sum Initial value of the running sum.
+ *
+ * \param data A pointer to the data over which the checksum is to be
+ * computed.
+ *
+ * \param len The number of bytes over which the checksum is to be
+ * computed.
+ *
+ * \return The complement of the accumulated checksum in network byte
+ * order.
+ */
+u16_t uip_cksum(u16_t sum, const void *data, u16_t len);
+
+
+/**
  * The length of any incoming data that is currently avaliable (if avaliable)
  * in the uip_appdata buffer.
  *

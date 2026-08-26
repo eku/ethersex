@@ -23,6 +23,8 @@
 
 #ifdef ROUTER_SUPPORT
 
+#include <string.h>
+
 #include "protocols/uip/uip.h"
 #include "protocols/uip/uip_neighbor.h"
 
@@ -48,6 +50,16 @@
 #endif
 
 #define BUF ((struct uip_tcpip_hdr *)&uip_buf[UIP_LLH_LEN])
+#define ICMPBUF ((struct uip_icmpip_hdr *)&uip_buf[UIP_LLH_LEN])
+
+/* ICMP message types (only the ones we generate ourselves). */
+#define ICMP_ECHO_REPLY 0
+#define ICMP_ECHO       8
+#define ICMP_TIME_EXCEEDED 11
+
+#define ICMP_ERROR_HDR_LEN 8	/* type, code, chksum, unused */
+/* RFC 792: internet header plus 64 bits of the datagram */
+#define ICMP_QUOTE_LEN (UIP_IPH_LEN + 8)
 
 uint8_t
 router_find_stack(uip_ipaddr_t *forwardip)
@@ -79,6 +91,72 @@ routing_input:
   /* Drop the packet */
   return 255;
 }
+
+
+#if ! UIP_CONF_IPV6
+/*
+ * Send an ICMP 'time exceeded' error message back to the sender of the
+ * IPv4 packet currently held in uip_buf, quoting its internet header
+ * plus the first 64 bits of the payload (RFC 792).  The error message
+ * goes out on the interface (stack) the offending packet arrived on.
+ */
+static void
+icmp_time_exceeded (uint8_t origin)
+{
+  uip_ipaddr_t src;
+
+  /* Never send an ICMP error in response to an ICMP error message,
+     see RFC 1812, section 4.3.2.7. */
+  if (BUF->proto == UIP_PROTO_ICMP
+      && ICMPBUF->type != ICMP_ECHO && ICMPBUF->type != ICMP_ECHO_REPLY)
+    return;
+
+  printf ("icmp: sending time exceeded message.\n");
+
+  uip_ipaddr_copy(src, BUF->srcipaddr);
+
+  /* Move internet header plus quoted payload of the offending packet
+     behind our own IP and ICMP headers. */
+  memmove (&uip_buf[UIP_LLH_LEN + UIP_IPH_LEN + ICMP_ERROR_HDR_LEN],
+           &uip_buf[UIP_LLH_LEN], ICMP_QUOTE_LEN);
+
+  /* Build a fresh IPv4 header for the error message. */
+  BUF->vhl = 0x45;
+  BUF->tos = 0;
+  BUF->len[0] =
+    ((UIP_IPH_LEN + ICMP_ERROR_HDR_LEN + ICMP_QUOTE_LEN) >> 8) & 0xff;
+  BUF->len[1] = (UIP_IPH_LEN + ICMP_ERROR_HDR_LEN + ICMP_QUOTE_LEN) & 0xff;
+  BUF->ipid[0] = BUF->ipid[1] = 0;
+  BUF->ipoffset[0] = BUF->ipoffset[1] = 0;
+  BUF->ttl = UIP_TTL;
+  BUF->proto = UIP_PROTO_ICMP;
+
+  /* The source address has to be one of our addresses on the
+     interface the packet was received from, RFC 1812, section
+     4.3.2.3. */
+  uip_stack_set_active (origin);
+  uip_ipaddr_copy(BUF->srcipaddr, uip_hostaddr);
+  uip_ipaddr_copy(BUF->destipaddr, src);
+
+  /* Build the ICMP header. */
+  ICMPBUF->type = ICMP_TIME_EXCEEDED;
+  ICMPBUF->icode = 0;               /* ttl exceeded in transit */
+  ICMPBUF->id = 0;                  /* unused */
+  ICMPBUF->seqno = 0;               /* unused */
+
+  ICMPBUF->icmpchksum = 0;
+  ICMPBUF->icmpchksum = ~(uip_cksum (0, &ICMPBUF->type,
+                                     ICMP_ERROR_HDR_LEN +
+                                     ICMP_QUOTE_LEN));
+
+  BUF->ipchksum = 0;
+  BUF->ipchksum = ~(uip_cksum (0, BUF, UIP_IPH_LEN));
+
+  uip_len = (UIP_LLH_LEN + UIP_IPH_LEN + ICMP_ERROR_HDR_LEN +
+             ICMP_QUOTE_LEN);
+  router_output_to (origin);
+}
+#endif /* !UIP_CONF_IPV6 */
 
 
 void
@@ -125,12 +203,17 @@ router_input(uint8_t origin)
       if (origin == dest)
 	goto drop;
 
-      if (-- BUF->ttl == 0)
+      /* Decrement the TTL, making us a visible router on the path
+         (RFC 1812, section 5.2.4).  If it would reach zero the packet
+         has to be destroyed and an ICMP error message sent back to
+         the sender.  Note: test before decrementing, so that packets
+         with a TTL of zero (or one) are caught as well. */
+      if (BUF->ttl <= 1)
 	{
-	  /* TODO send ICMP message */
-	  printf ("ttl exceeded, should send ICMP message.\n");
+	  icmp_time_exceeded (origin);
 	  goto drop;
 	}
+      -- BUF->ttl;
 
 #ifdef IPCHAIR_HAVE_FORWARD
       ipchair_FORWARD_chair();
