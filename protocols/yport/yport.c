@@ -25,6 +25,7 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
+#include <util/atomic.h>
 #include <string.h>
 #include "core/eeprom.h"
 
@@ -70,30 +71,43 @@ void yport_init(void)
 uint8_t
 yport_rxstart(uint8_t * data, uint16_t len)
 {
-  uint16_t diff = yport_send_buffer.len - yport_send_buffer.sent;
-  if (diff == 0)
+  uint8_t rc = 0;
+
+  /* Synchronise with the TX interrupt handler, which drains
+     yport_send_buffer concurrently.  Without this the ISR could leave
+     .sent greater than .len, which made the .diff calculation below
+     underflow and a following memmove() of ~65535 bytes corrupt RAM and
+     freeze the firmware under heavy TCP->USART load. */
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
   {
-    /* Copy the data to the send buffer */
-    memcpy(yport_send_buffer.data, data, len);
-    yport_send_buffer.len = len;
-    goto start_sending;
-    /* The actual packet can be pushed into the buffer */
+    uint16_t sent = yport_send_buffer.sent;
+    uint16_t buflen = yport_send_buffer.len;
+
+    /* Sanitise a stale/inconsistent state: never allow sent > len, as
+       that makes the length arithmetic below wrap around. */
+    if (sent > buflen)
+      buflen = sent;
+
+    uint16_t diff = buflen - sent;
+    if (diff == 0 || (diff + len) < YPORT_BUFFER_LEN)
+    {
+      if (diff != 0)
+      {
+        /* move the not-yet-transmitted bytes to the front of the buffer */
+        memmove(yport_send_buffer.data,
+                yport_send_buffer.data + sent, diff);
+      }
+      memcpy(yport_send_buffer.data + diff, data, len);
+      yport_send_buffer.len = diff + len;
+
+      /* Enable the tx interrupt and send the first character */
+      yport_send_buffer.sent = 1;
+      usart(UCSR, B) |= _BV(usart(TXCIE));
+      usart(UDR) = yport_send_buffer.data[0];
+      rc = 1;
+    }
   }
-  else if ((diff + len) < YPORT_BUFFER_LEN)
-  {
-    memmove(yport_send_buffer.data,
-            yport_send_buffer.data + yport_send_buffer.sent, diff);
-    memcpy(yport_send_buffer.data + diff, data, len);
-    yport_send_buffer.len = diff + len;
-    goto start_sending;
-  }
-  return 0;
-start_sending:
-  yport_send_buffer.sent = 1;
-  /* Enable the tx interrupt and send the first character */
-  usart(UCSR, B) |= _BV(usart(TXCIE));
-  usart(UDR) = yport_send_buffer.data[0];
-  return 1;
+  return rc;
 }
 
 

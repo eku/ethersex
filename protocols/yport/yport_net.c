@@ -86,10 +86,16 @@ yport_net_main(void)
       /* data we have sent was acked */
       ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
       {
-        yport_recv_buffer.len -= yport_recv_buffer.sent;
+        uint16_t sent = yport_recv_buffer.sent;
+        uint16_t len = yport_recv_buffer.len;
+        /* defensive: never let the subtraction underflow */
+        if (sent > len)
+          sent = len;
+        yport_recv_buffer.len = len - sent;
         memmove(yport_recv_buffer.data,
-                yport_recv_buffer.data + yport_recv_buffer.sent,
-                yport_recv_buffer.len);
+                yport_recv_buffer.data + sent,
+                len - sent);
+        yport_recv_buffer.sent = 0;
       }
     }
   }
@@ -120,15 +126,21 @@ yport_net_main(void)
   }
 
   /* restart connection */
-  if (uip_poll() &&
-      uip_stopped(yport_conn) &&
-      yport_send_buffer.sent == yport_send_buffer.len)
+  if (uip_poll() && uip_stopped(yport_conn))
   {
-    uip_restart();
+    uint8_t empty;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+    {
+      empty = (yport_send_buffer.sent == yport_send_buffer.len);
+    }
+    if (empty)
+      uip_restart();
   }
 
   /* send data */
   if ((uip_poll() || uip_acked())
+      /* only hand new data to uIP when nothing is still in flight */
+      && !uip_outstanding(yport_conn)
       /* receive buffer reached water mark */
 #if CONF_YPORT_FLUSH > 0
       && (yport_recv_buffer.len > (YPORT_BUFFER_LEN / 4)
@@ -142,8 +154,17 @@ yport_net_main(void)
     /* we have enough uart data, send it via tcp */
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
-      uip_send(yport_recv_buffer.data, yport_recv_buffer.len);
-      yport_recv_buffer.sent = yport_recv_buffer.len;
+      uint16_t avail = yport_recv_buffer.len;
+      /* Never hand uIP more than it can transmit in a single segment.
+         uip_send() silently drops everything beyond the peer's advertised
+         window / MSS, while we would otherwise mark it as sent and drain
+         it on the ACK, losing those bytes forever.  By sending only what
+         fits, the remainder stays buffered and is sent on the next
+         poll/ack. */
+      uint16_t sendlen = (avail < yport_conn->mss) ? avail : yport_conn->mss;
+
+      uip_send(yport_recv_buffer.data, sendlen);
+      yport_recv_buffer.sent = sendlen;
 #if CONF_YPORT_FLUSH > 0
       yport_lastservice = 0;
       yport_lf = 0;
