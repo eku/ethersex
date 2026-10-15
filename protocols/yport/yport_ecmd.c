@@ -43,10 +43,36 @@ parse_cmd_yport_stats(char *cmd, char *output, uint16_t len)
   return ECMD_FINAL(chars);
 }
 
+#ifdef DEBUG_YPORT
+int16_t
+parse_cmd_yport_probe(char *cmd, char *output, uint16_t len)
+{
+  struct yport_probe_t p;
+  yport_probe_get(&p);
+  int16_t chars = snprintf_P(output, len,
+      PSTR("mag=%02x rst=%u fl=%02x | rlen=%u rsent=%u sgtl=%u lgtb=%u "
+           "snd=%u av=%u drn=%u ovf=%u rjct=%u path=%u"),
+      p.magic, p.reset_count, p.flags,
+      p.recv_len_max, p.recv_sent_max, p.sent_gt_len, p.len_gt_buf,
+      p.sendlen_max, p.avail_max, p.drain_max,
+      p.rx_overflow, p.rxstart_reject, p.last_path);
+  return ECMD_FINAL(chars);
+}
+
+int16_t
+parse_cmd_yport_probe_clear(char *cmd, char *output, uint16_t len)
+{
+  yport_probe_clear();
+  return ECMD_FINAL(snprintf_P(output, len, PSTR("probe cleared")));
+}
+#endif
+
 /*
   -- Ethersex META --
   block([[YPORT]] commands)
   ecmd_ifdef(DEBUG_YPORT)
     ecmd_feature(yport_stats, "yport stats",, Report statistic counters)
+    ecmd_feature(yport_probe, "yport probe",, Dump EEPROM diagnostics)
+    ecmd_feature(yport_probe_clear, "yport probe clear",, Reset EEPROM diagnostics)
   ecmd_endif()
 */

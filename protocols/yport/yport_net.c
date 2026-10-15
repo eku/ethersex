@@ -49,6 +49,10 @@ yport_net_main(void)
   yport_lastservice++;
 #endif
 
+#ifdef DEBUG_YPORT
+  yport_probe_poll();
+#endif
+
   if (uip_connected())
   {
     if (yport_conn == NULL)
@@ -84,10 +88,33 @@ yport_net_main(void)
     else
     {
       /* data we have sent was acked */
+#ifdef DEBUG_YPORT
+      uint8_t probe_anomaly = 0;
+#endif
       ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
       {
         uint16_t sent = yport_recv_buffer.sent;
         uint16_t len = yport_recv_buffer.len;
+#ifdef DEBUG_YPORT
+        yport_probe_ram.last_path = YPORT_PROBE_PATH_DRAIN;
+        if (len > yport_probe_ram.recv_len_max)
+          yport_probe_ram.recv_len_max = len;
+        if (sent > yport_probe_ram.recv_sent_max)
+          yport_probe_ram.recv_sent_max = sent;
+        if (sent > len)
+        {
+          yport_probe_ram.sent_gt_len++;
+          yport_probe_ram.flags |= YPORT_PROBE_FLAG_SENT_GT_LEN;
+          probe_anomaly = 1;
+          sent = len;
+        }
+        if (len > YPORT_BUFFER_LEN)
+        {
+          yport_probe_ram.len_gt_buf++;
+          yport_probe_ram.flags |= YPORT_PROBE_FLAG_LEN_GT_BUF;
+          probe_anomaly = 1;
+        }
+#endif
         /* defensive: never let the subtraction underflow */
         if (sent > len)
           sent = len;
@@ -96,7 +123,15 @@ yport_net_main(void)
                 yport_recv_buffer.data + sent,
                 len - sent);
         yport_recv_buffer.sent = 0;
+#ifdef DEBUG_YPORT
+        if ((len - sent) > yport_probe_ram.drain_max)
+          yport_probe_ram.drain_max = len - sent;
+#endif
       }
+#ifdef DEBUG_YPORT
+      if (probe_anomaly)
+        yport_probe_write();
+#endif
     }
   }
 
@@ -116,12 +151,31 @@ yport_net_main(void)
   /* retransmit last packet */
   if (uip_rexmit())
   {
+#ifdef DEBUG_YPORT
+    uint8_t probe_anomaly = 0;
+#endif
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
-      uip_send(yport_recv_buffer.data, yport_recv_buffer.sent);
+#ifdef DEBUG_YPORT
+      yport_probe_ram.last_path = YPORT_PROBE_PATH_REXMIT;
+#endif
+      uint16_t rl = yport_recv_buffer.sent;
+#ifdef DEBUG_YPORT
+      if (rl > yport_probe_ram.recv_sent_max)
+        yport_probe_ram.recv_sent_max = rl;
+      if (rl > UIP_TCP_MSS)
+      {
+        yport_probe_ram.flags |= YPORT_PROBE_FLAG_SEND_GT_MSS;
+        rl = UIP_TCP_MSS;
+        probe_anomaly = 1;
+      }
+#endif
+      uip_send(yport_recv_buffer.data, rl);
     }
 #ifdef DEBUG_YPORT
     yport_eth_retransmit++;
+    if (probe_anomaly)
+      yport_probe_write();
 #endif
   }
 
@@ -152,9 +206,25 @@ yport_net_main(void)
     )
   {
     /* we have enough uart data, send it via tcp */
+#ifdef DEBUG_YPORT
+    uint8_t probe_anomaly = 0;
+#endif
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
       uint16_t avail = yport_recv_buffer.len;
+#ifdef DEBUG_YPORT
+      yport_probe_ram.last_path = YPORT_PROBE_PATH_SEND;
+      if (avail > yport_probe_ram.avail_max)
+        yport_probe_ram.avail_max = avail;
+      if (avail > yport_probe_ram.recv_len_max)
+        yport_probe_ram.recv_len_max = avail;
+      if (avail > YPORT_BUFFER_LEN)
+      {
+        yport_probe_ram.len_gt_buf++;
+        yport_probe_ram.flags |= YPORT_PROBE_FLAG_AVAIL_GT_BUF;
+        probe_anomaly = 1;
+      }
+#endif
       /* Never hand uIP more than it can transmit in a single segment.
          uip_send() silently drops everything beyond the peer's advertised
          window / MSS, while we would otherwise mark it as sent and drain
@@ -162,6 +232,18 @@ yport_net_main(void)
          fits, the remainder stays buffered and is sent on the next
          poll/ack. */
       uint16_t sendlen = (avail < yport_conn->mss) ? avail : yport_conn->mss;
+#ifdef DEBUG_YPORT
+      if (sendlen > yport_probe_ram.sendlen_max)
+        yport_probe_ram.sendlen_max = sendlen;
+      /* Hard safety clamp so uip_send() can never overrun uip_sappdata
+         even if yport_conn->mss got corrupted. */
+      if (sendlen > UIP_TCP_MSS)
+      {
+        yport_probe_ram.flags |= YPORT_PROBE_FLAG_SEND_GT_MSS;
+        sendlen = UIP_TCP_MSS;
+        probe_anomaly = 1;
+      }
+#endif
 
       uip_send(yport_recv_buffer.data, sendlen);
       yport_recv_buffer.sent = sendlen;
@@ -170,6 +252,10 @@ yport_net_main(void)
       yport_lf = 0;
 #endif
     }
+#ifdef DEBUG_YPORT
+    if (probe_anomaly)
+      yport_probe_write();
+#endif
   }
 }
 

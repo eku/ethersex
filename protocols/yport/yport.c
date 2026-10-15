@@ -33,6 +33,10 @@
 #define YPORT_USART_CONFIG_8E2 2
 
 #include "config.h"
+#ifdef DEBUG_YPORT
+#include <avr/eeprom.h>
+#include "core/periodic.h"
+#endif
 #include "yport.h"
 #include "yport_net.h"
 
@@ -58,6 +62,74 @@ uint16_t yport_rx_overflow;
 uint16_t yport_rx_parityerror;
 uint16_t yport_rx_bufferfull;
 uint16_t yport_eth_retransmit;
+
+/* Diagnostics are persisted to a dedicated EEPROM region located right
+ * after the regular config block, so they survive a firmware reboot even
+ * though RAM is lost.  EEPROM writes are only performed from the main
+ * loop (never from an ISR or the millitick periodic handler, which both
+ * run in interrupt context). */
+#define YPORT_PROBE_EEPROM \
+  ((void *)((uint8_t *)EEPROM_CONFIG_BASE + sizeof(struct eeprom_config_t)))
+
+struct yport_probe_t yport_probe_ram;
+volatile uint8_t yport_probe_dirty;
+static uint32_t yport_probe_last_flush;
+
+void
+yport_probe_write(void)
+{
+  eeprom_update_block(&yport_probe_ram, YPORT_PROBE_EEPROM,
+                      sizeof(yport_probe_ram));
+}
+
+void
+yport_probe_get(struct yport_probe_t *dst)
+{
+  eeprom_read_block(dst, YPORT_PROBE_EEPROM, sizeof(*dst));
+}
+
+void
+yport_probe_init(void)
+{
+  eeprom_read_block(&yport_probe_ram, YPORT_PROBE_EEPROM,
+                    sizeof(yport_probe_ram));
+
+  /* If the magic is already present, the previous run did not shut down
+   * cleanly - count that as an (unexpected) reboot. */
+  if (yport_probe_ram.magic == YPORT_PROBE_MAGIC)
+    yport_probe_ram.reset_count++;
+
+  yport_probe_ram.magic = YPORT_PROBE_MAGIC;
+  yport_probe_ram.last_path = YPORT_PROBE_PATH_IDLE;
+  yport_probe_dirty = 0;
+  yport_probe_last_flush = periodic_mticks_count;
+  yport_probe_write();
+}
+
+void
+yport_probe_clear(void)
+{
+  uint16_t rst = yport_probe_ram.reset_count;
+  memset(&yport_probe_ram, 0, sizeof(yport_probe_ram));
+  yport_probe_ram.magic = YPORT_PROBE_MAGIC;
+  yport_probe_ram.reset_count = rst;   /* keep the reboot counter */
+  yport_probe_write();
+}
+
+void
+yport_probe_poll(void)
+{
+  /* Persist a pending ISR-detected anomaly immediately, otherwise
+   * periodically (~1s) so counters from interrupt context survive. */
+  if (yport_probe_dirty
+      || (uint32_t)(periodic_mticks_count - yport_probe_last_flush)
+         >= CONF_MTICKS_PER_SEC)
+  {
+    yport_probe_dirty = 0;
+    yport_probe_last_flush = periodic_mticks_count;
+    yport_probe_write();
+  }
+}
 #endif
 #if CONF_YPORT_FLUSH > 0
 uint8_t yport_lf;
@@ -65,6 +137,9 @@ uint8_t yport_lf;
 
 void yport_init(void)
 {
+#ifdef DEBUG_YPORT
+  yport_probe_init();
+#endif
   usart_init();
 }
 
@@ -72,6 +147,10 @@ uint8_t
 yport_rxstart(uint8_t * data, uint16_t len)
 {
   uint8_t rc = 0;
+
+#ifdef DEBUG_YPORT
+  yport_probe_ram.last_path = YPORT_PROBE_PATH_RXSTART;
+#endif
 
   /* Synchronise with the TX interrupt handler, which drains
      yport_send_buffer concurrently.  Without this the ISR could leave
@@ -106,6 +185,10 @@ yport_rxstart(uint8_t * data, uint16_t len)
       usart(UDR) = yport_send_buffer.data[0];
       rc = 1;
     }
+#ifdef DEBUG_YPORT
+    else
+      yport_probe_ram.rxstart_reject++;
+#endif
   }
   return rc;
 }
@@ -113,6 +196,9 @@ yport_rxstart(uint8_t * data, uint16_t len)
 
 ISR(usart(USART, _TX_vect))
 {
+#ifdef DEBUG_YPORT
+  yport_probe_ram.last_path = YPORT_PROBE_PATH_TX_VECT;
+#endif
   if (yport_send_buffer.sent < yport_send_buffer.len)
   {
     usart(UDR) = yport_send_buffer.data[yport_send_buffer.sent++];
@@ -126,6 +212,9 @@ ISR(usart(USART, _TX_vect))
 
 ISR(usart(USART, _RX_vect))
 {
+#ifdef DEBUG_YPORT
+  yport_probe_ram.last_path = YPORT_PROBE_PATH_RX_VECT;
+#endif
   while (usart(UCSR, A) & _BV(usart(RXC)))
   {
     if (usart(UCSR, A) & (_BV(usart(FE)) | _BV(usart(DOR)) | _BV(usart(UPE))))
@@ -134,7 +223,12 @@ ISR(usart(USART, _RX_vect))
       if (usart(UCSR, A) & _BV(usart(FE)))
         yport_rx_frameerror++;
       if (usart(UCSR, A) & _BV(usart(DOR)))
+      {
         yport_rx_overflow++;
+        yport_probe_ram.rx_overflow++;
+        yport_probe_ram.flags |= YPORT_PROBE_FLAG_RX_OVERFLOW;
+        yport_probe_dirty = 1;
+      }
       if (usart(UCSR, A) & _BV(usart(UPE)))
         yport_rx_parityerror++;
 #endif
@@ -145,7 +239,13 @@ ISR(usart(USART, _RX_vect))
     {
       uint8_t v = usart(UDR);
       if (yport_recv_buffer.len < YPORT_BUFFER_LEN)
+      {
         yport_recv_buffer.data[yport_recv_buffer.len++] = v;
+#ifdef DEBUG_YPORT
+        if (yport_recv_buffer.len > yport_probe_ram.recv_len_max)
+          yport_probe_ram.recv_len_max = yport_recv_buffer.len;
+#endif
+      }
 #ifdef DEBUG_YPORT
       else
         yport_rx_bufferfull++;
