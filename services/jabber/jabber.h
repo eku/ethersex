@@ -26,6 +26,16 @@
 #include <stdint.h>
 #include "config.h"
 
+/* Choice values for JABBER_AUTH_METHOD - the Menuconfig choice writes
+ * JABBER_AUTH_METHOD as the symbol name, the symbols themselves are
+ * not emitted to autoconf.h. Define them here so #if comparisons work
+ * numerically instead of relying on undefined==0. */
+#ifndef JABBER_AUTH_PLAIN
+#define JABBER_AUTH_PLAIN 0
+#define JABBER_AUTH_DIGEST_MD5 1
+#define JABBER_AUTH_SCRAM_SHA1 2
+#endif
+
 #ifdef DEBUG_JABBER
 #include "core/debug.h"
 #define JABDEBUG(a...)  debug_printf("jabber: " a)

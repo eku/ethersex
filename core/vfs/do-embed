@@ -25,6 +25,7 @@ STAT_ARGS="-c %s"
 [ `uname` = "FreeBSD" ] && STAT_ARGS="-f %z"
 
 (cat <<EOF
+#include <avr/io.h>
 #include <avr/pgmspace.h>
 SPM_PAGESIZE
 EOF
@@ -41,14 +42,22 @@ do_strip=false
 grep -Fq "#define VFS_INLINE_HTML_CLEAN_SUPPORT" autoconf.h &&  do_strip=true
 
 while true; do
-  fn="$1"; shift
-  test "x$fn" = "x" && {
+  test "x$1" = "x" && {
     SZ=$(stat ${STAT_ARGS} ethersex.bin)
     echo "Final size of ethersex.bin is $SZ."
     exit 0
   }
+  fn="$1"; shift
   >/dev/null
   if [ ! -e "$fn" ]; then 
+    continue
+  fi
+  if [ ! -s "$fn" ]; then
+    echo "Skipping empty file $fn ..."
+    continue
+  fi
+  if ! grep -q '[^[:space:]]' "$fn" 2>/dev/null; then
+    echo "Skipping whitespace-only file $fn ..."
     continue
   fi
   unzipped=$(echo "$fn" | sed 's/\.gz$//')
