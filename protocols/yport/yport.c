@@ -94,10 +94,19 @@ yport_probe_init(void)
   eeprom_read_block(&yport_probe_ram, YPORT_PROBE_EEPROM,
                     sizeof(yport_probe_ram));
 
-  /* If the magic is already present, the previous run did not shut down
-   * cleanly - count that as an (unexpected) reboot. */
   if (yport_probe_ram.magic == YPORT_PROBE_MAGIC)
+  {
+    /* The magic is already present: the previous run did not shut down
+     * cleanly (crashed/rebooted), so count this boot. */
     yport_probe_ram.reset_count++;
+  }
+  else
+  {
+    /* Never-initialised EEPROM region: start from a clean slate and count
+     * this boot, so reset_count is meaningful instead of leftover data. */
+    memset(&yport_probe_ram, 0, sizeof(yport_probe_ram));
+    yport_probe_ram.reset_count = 1;
+  }
 
   yport_probe_ram.magic = YPORT_PROBE_MAGIC;
   yport_probe_ram.last_path = YPORT_PROBE_PATH_IDLE;
@@ -109,10 +118,10 @@ yport_probe_init(void)
 void
 yport_probe_clear(void)
 {
-  uint16_t rst = yport_probe_ram.reset_count;
+  /* Full reset: zero every counter/flag, including reset_count, so the
+   * user gets a clean slate.  Boots that follow are then counted from 0. */
   memset(&yport_probe_ram, 0, sizeof(yport_probe_ram));
   yport_probe_ram.magic = YPORT_PROBE_MAGIC;
-  yport_probe_ram.reset_count = rst;   /* keep the reboot counter */
   yport_probe_write();
 }
 
